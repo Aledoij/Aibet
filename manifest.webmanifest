@@ -1,0 +1,17 @@
+{
+ "name": "Matchup Predictor",
+ "short_name": "Predictor",
+ "start_url": "picks.html",
+ "scope": "./",
+ "display": "standalone",
+ "orientation": "portrait",
+ "background_color": "#070b16",
+ "theme_color": "#070b16",
+ "description": "UFC, NBA and NFL win chances from Alex's models. Odds shown for comparison only.",
+ "icons": [
+  {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
+  {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png"},
+  {"src": "icons/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
+  {"src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+ ]
+}
