@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="mp-built" content="2026-10-24T16:04:56Z"><meta name="theme-color" content="#070b16"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Predictor"><meta name="robots" content="noindex, nofollow"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icons/icon-192.png"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><script>if (location.protocol === "https:" && "serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js"));</script></head><body>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="mp-built" content="2026-10-24T16:44:49Z"><meta name="theme-color" content="#070b16"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Predictor"><meta name="robots" content="noindex, nofollow"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icons/icon-192.png"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><script>if (location.protocol === "https:" && "serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js"));</script></head><body>
 <title>Matchup Predictor</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -648,6 +648,10 @@ h1, h2, h3 { letter-spacing: -.01em } h2 { text-transform: none; font-size: 22px
   body.sheet .sheetbar { padding-block: calc(env(safe-area-inset-top, 0px) + 8px) 8px }
   body.sheet .board { margin-top: 10px }
 }
+.crow .mu small.od { font: 500 11.5px/1.3 var(--mono); color: var(--muted); letter-spacing: 0 }
+.selodds { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 16px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 13px }
+.selodds span { display: block; min-width: 0 } .selodds small { display: block; font: 500 10.5px/1.3 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted) }
+.selodds b { font-variant-numeric: tabular-nums } .selodds em { grid-column: 1 / -1; font-style: normal; font-size: 11.5px; color: var(--dim) }
 </style>
 
 <div class="wrap">
@@ -1948,6 +1952,18 @@ function renderSel(k, A, B, st, p) {
     + (mk == null ? `<div class="seltile off"><small>Betting market</small><span class="nm">–</span><b>No odds</b><span>None saved for this ${S.noun}</span></div>`
       : Math.round(mq * 100) === 50 ? `<div class="seltile"><small>Betting market</small><span class="nm">Even</span><b>50%</b><span>Coin flip · compare only</span></div>`
       : `<div class="seltile"><small>Betting market</small><span class="nm">${esc(shortName(k, mf.name))}</span><b>${Math.round(mq * 100)}%</b><span>${mf === fav ? "Agrees" : "Disagrees"} · compare only</span></div>`);
+  { // sportsbook lines for this matchup, compare only (moneyline from the odds boxes, spread/total from the schedule)
+    const { g, sw } = top3Game(k, A, B), cell = (h, v) => `<span><small>${h}</small>${v}</span>`, out = [];
+    if (A !== B && st.oddsA !== "" && st.oddsB !== "" && st.oddsA != null && st.oddsB != null)
+      out.push(cell("Moneyline", `${esc(shortName(k, A.name))} <b>${esc(fmtOdds(isFinite(+st.oddsA) ? +st.oddsA : st.oddsA))}</b> · ${esc(shortName(k, B.name))} <b>${esc(fmtOdds(isFinite(+st.oddsB) ? +st.oddsB : st.oddsB))}</b>`));
+    if (g && g.spreadA != null) {
+      const sa = sw ? -g.spreadA : g.spreadA, oa = sw ? g.spreadB_o : g.spreadA_o, ob = sw ? g.spreadA_o : g.spreadB_o;
+      out.push(cell("Spread", `${esc(shortName(k, A.name))} <b>${sgn(sa)}</b>${oa != null ? ` (${esc(fmtOdds(oa))})` : ""} · ${esc(shortName(k, B.name))} <b>${sgn(-sa)}</b>${ob != null ? ` (${esc(fmtOdds(ob))})` : ""}`));
+    }
+    if (g && g.total != null) out.push(cell("Total", `<b>${g.total}</b>${g.over_o != null ? ` · over ${esc(fmtOdds(g.over_o))}` : ""}${g.under_o != null ? ` · under ${esc(fmtOdds(g.under_o))}` : ""}`));
+    if (A !== B) out.push(cell("Fair odds (model)", `${esc(shortName(k, fav.name))} <b>${fairOdds(q)}</b>`));
+    $("sel-tiles").insertAdjacentHTML("beforeend", A === B ? "" : `<div class="selodds">${out.join("")}<em>Sportsbook odds are shown only to compare. They never change the pick. Player prop lines are in the Props and Top 3 tabs.</em></div>`);
+  }
   const saved = wlHas(k, A.name, B.name);
   $("sel-save").setAttribute("aria-pressed", saved);
   $("sel-save").querySelector("span").textContent = saved ? "Saved" : "Save";
@@ -2078,9 +2094,12 @@ function renderUpcoming() {
       : k === "nfl" ? [g.a, g.b].filter(t => NEWS_QB[t]?.qb).map(t => shortName(k, t) + " QB change").join(", ") : "";
     const tags = [wlHas(k, g.a, g.b) ? `<span class="n">★</span>` : "", dbf ? "Debut model" : "", news ? `<span class="n">${esc(news)}</span>` : "",
       dis ? `<span class="w">Bookies disagree</span>` : ""].filter(Boolean);
+    // sportsbook odds on the row, compare only: moneylines in the same order as the names, plus the total
+    const oo = t => t === g.a ? g.oa : g.ob, mlx = g.oa != null && g.ob != null;
+    const odds = [mlx ? `Odds ${esc(fmtOdds(oo(l)))} / ${esc(fmtOdds(oo(r)))}` : "", g.total != null ? `O/U ${g.total}` : ""].filter(Boolean).join(" · ");
     return `<button class="crow t-${tc}" data-i="${i}"${dbf ? ` aria-expanded="${state.debOpen === i}"` : ""} aria-pressed="${on}" aria-label="${esc(g.a)} versus ${esc(g.b)}: model picks ${esc(fav)}, ${Math.round(q * 100)}%">
       <span class="tm">${tm}</span>
-      <span class="mu"><b>${esc(shortName(k, l))} <i>${home ? "@" : "vs"}</i> ${esc(shortName(k, r))}</b><small>${tags.length ? tags.join(" · ") : (q < 0.55 ? "Toss-up" : q >= 0.7 ? "Strong pick" : "Pick")}</small></span>
+      <span class="mu"><b>${esc(shortName(k, l))} <i>${home ? "@" : "vs"}</i> ${esc(shortName(k, r))}</b>${odds ? `<small class="od">${odds}</small>` : ""}<small>${tags.length ? tags.join(" · ") : (q < 0.55 ? "Toss-up" : q >= 0.7 ? "Strong pick" : "Pick")}</small></span>
       <span class="pk"><b>${Math.round(q * 100)}%</b><small>${esc(shortName(k, fav))}</small></span>
       <span class="bar" style="width:${q * 100}%" aria-hidden="true"></span></button>` + (dbf && state.debOpen === i ? debutBox(g, dbf) : "");
   };
