@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="mp-built" content="2026-10-25T11:28:21Z"><meta name="theme-color" content="#070b16"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Predictor"><meta name="robots" content="noindex, nofollow"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icons/icon-192.png"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><script>if (location.protocol === "https:" && "serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js"));</script></head><body>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="mp-built" content="2026-10-25T11:32:48Z"><meta name="theme-color" content="#070b16"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Predictor"><meta name="robots" content="noindex, nofollow"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icons/icon-192.png"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><script>if (location.protocol === "https:" && "serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js"));</script></head><body>
 <title>Matchup Predictor</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2329,7 +2329,7 @@ function renderNbaProps(A, B) {
     <div class="pkey"><span><i style="background:var(--ink)"></i>Projection</span><span><i style="background:var(--a);opacity:.5"></i>80% range</span></div>
     <h4 class="pphead">${lab}</h4><p>Tested on five past seasons it never trained on: misses by ${NBA_GAIN[st]} less than the player's season average when lineups are confirmed (about half that without lineup news). Its 80% ranges held 81–94% of results. Projections, not betting picks: not tested against real bookmaker lines, which are much sharper than a season average.</p>`;
   for (const r of rs) {
-    const s = side(r), [lo, hi] = r[st + "_80pct_range"], bl = BOOK_LINES[pkey(r.player) + "|" + st], L = bl ? bl.line : Math.floor(r[st]) + 0.5, i = P.players.indexOf(r);
+    const s = side(r), [lo, hi] = r[st + "_80pct_range"], bl = bookFor(r.player, st), L = bl ? bl.line : Math.floor(r[st]) + 0.5, i = P.players.indexOf(r);
     const mr = r.minutes_80pct_range, sub = `${surname(r.team)} · ${r.status} · ${Math.round(r.minutes)} min${mr ? ` (${mr[0]}–${mr[1]})` : ""}${r.confidence ? ` · ${r.confidence}` : ""}`;
     const why = (r.reasons || []).map(x => `${esc(x.reason)}${x[st] != null && Math.abs(x[st]) >= 0.05 ? ` <b>${x[st] > 0 ? "+" : "−"}${Math.abs(x[st]).toFixed(1)}</b>` : ""}`);
     const news = (r.news || []).map(n => typeof n === "string" ? n : (n.text || n.headline || "")).filter(Boolean);
@@ -2372,11 +2372,11 @@ function renderProps(k, A, B) {
     for (const r of rs) {
       const s = side(r), sub = `${r.pos} · ${r.t}${r.qst ? " · questionable" : ""}`;
       if (m === "any_td") {
-        const td = BOOK_LINES[pkey(r.p) + "|any_td"];
+        const td = bookFor(r.p, "any_td");
         html += `<div class="prow ${s}"><span class="pn"><i></i>${esc(r.p)}<small>${sub}${td?.over != null ? ` · sportsbook ${fmtOdds(td.over)}` : ""}</small></span><span class="pv"><small>likely</small><b>${Math.round(r.mean * 100)}%</b><small>to score · season ${Math.round(r.base * 100)}% of games</small></span></div>`;
         continue;
       }
-      const bkl = BOOK_LINES[pkey(r.p) + "|" + m], lo = r.q ? r.q[1] : poisQ(0.1, r.mean), hi = r.q ? r.q[9] : poisQ(0.9, r.mean), L = bkl ? bkl.line : propLine(m, r), po = propOver(r, L);
+      const bkl = bookFor(r.p, m), lo = r.q ? r.q[1] : poisQ(0.1, r.mean), hi = r.q ? r.q[9] : poisQ(0.9, r.mean), L = bkl ? bkl.line : propLine(m, r), po = propOver(r, L);
       const at = v => Math.max(0, Math.min(100, v / top * 100));
       html += `<div class="prow ${s}" data-i="${P.rows.indexOf(r)}"><span class="pn"><i></i>${esc(r.p)}<small>${sub}</small></span>
         <span class="pv"><small>likely</small><b>${fx(m, likely(r))}</b><small>season avg ${fx(m, r.base)}</small></span>
@@ -2714,11 +2714,24 @@ const fmtOdds = v => typeof v === "number" && Math.abs(v) >= 100 ? (v > 0 ? "+" 
 const NBA_LSTAT = { points: "pts", rebounds: "reb", assists: "ast", threes: "fg3m", pra: "pra" };
 const pkey = n => { const w = String(n).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z\s-]/g, "").split(/\s+/).filter(x => x && !/^(jr|sr|ii|iii|iv)$/.test(x)); return w.length ? w[0][0] + " " + w.at(-1) : ""; };
 const BOOK_LINES = {};  // "j harden|pts" -> today's consensus sportsbook line (vegasinsider, via the news check)
-for (const r of D.nba_prop_lines || []) if (NBA_LSTAT[r.stat]) BOOK_LINES[pkey(r.player) + "|" + NBA_LSTAT[r.stat]] = r;
-for (const r of D.prop_lines || []) BOOK_LINES[pkey(r.player) + "|" + r.stat] = r;  // {player, stat (app key), line, over, under}
+// Lookups by full name when the feed has one (NFL), by first initial + surname only when that is unambiguous (NBA
+// projections use "B. Adebayo"). Fixed 2026-10-25: "Bijan Robinson (ATL)" keyed as "b atl", and Brian Robinson's
+// line overwrote Bijan's under "b robinson". The first row for a player and stat wins (PropLine rows come first).
+const bkName = n => String(n).replace(/\s*\([^)]*\)\s*$/, "");
+const fullKey = n => bkName(n).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z\s-]/g, "").split(/\s+/).filter(x => x && !/^(jr|sr|ii|iii|iv)$/.test(x)).join(" ");
+const BOOK_FULL = {}, BOOK_PK = {};
+const bkAdd = (name, st, r) => {
+  const f = fullKey(name) + "|" + st, k = pkey(bkName(name)) + "|" + st;
+  if (!(f in BOOK_FULL)) BOOK_FULL[f] = r;
+  if (!(k in BOOK_PK)) BOOK_PK[k] = { r, full: fullKey(name) }; else if (BOOK_PK[k] && BOOK_PK[k].full !== fullKey(name)) BOOK_PK[k] = null;  // two players share it
+};
+for (const r of D.prop_lines || []) bkAdd(r.player, r.stat, r);  // {player, stat (app key), line, over, under}
+for (const r of D.nba_prop_lines || []) if (NBA_LSTAT[r.stat]) bkAdd(r.player, NBA_LSTAT[r.stat], r);
+const bookFor = (name, st) => { const t = bkName(name).split(/\s+/); return /^[A-Za-z]\.?$/.test(t[0] || "") ? BOOK_PK[pkey(bkName(name)) + "|" + st]?.r : BOOK_FULL[fullKey(name) + "|" + st] ?? null; };
+for (const k in BOOK_FULL) BOOK_LINES[k] = BOOK_FULL[k];  // kept for anything that lists them
 // sportsbook line for a parlay market: { line, o1, o2 } (o1 = over / side A), or null. Compare-only.
 const bookLine = M => {
-  if (M.prop) { const r = M.sk && BOOK_LINES[pkey(M.player) + "|" + M.sk]; return r ? { line: r.line, o1: r.over ?? null, o2: r.under ?? null } : null; }
+  if (M.prop) { const r = M.sk && bookFor(M.player, M.sk); return r ? { line: r.line, o1: r.over ?? null, o2: r.under ?? null } : null; }
   const g = M.g;
   if (M.id === "spread" && g?.spreadA != null) return { line: g.spreadA, o1: g.spreadA_o ?? null, o2: g.spreadB_o ?? null };
   if (M.id === "total" && g?.total != null) return { line: g.total, o1: g.over_o ?? null, o2: g.under_o ?? null };
@@ -2996,6 +3009,27 @@ function plBestAt(T) {
   }
   return { legs, dec, est, ok: dec >= T.dec - T.slack, T, day };
 }
+// Player props parlay (Alex 2026-10-25): NBA + NFL props at the REAL sportsbook line (never an alt line), on the side
+// the model prefers, 60%+ sure, one per player, different games first; most sure first until it pays around −150 or
+// better. One day only. The price only decides how many legs; it never changes a pick or its chance.
+function plPropsAt(T) {
+  const cand = [];
+  for (const k of ["nba", "nfl"]) for (const L of plLegs(k)) for (const M of plMarkets(L).filter(m => m.prop && !m.noLine)) {
+    const bl = bookLine(M);
+    if (!bl) continue;
+    const p1 = M.p1(bl.line), side = p1 >= 0.5 ? 1 : 2, q = side === 1 ? p1 : 1 - p1, o = side === 1 ? bl.o1 : bl.o2;
+    if (q < 0.6 || o == null || !decOdds(o)) continue;
+    cand.push({ ...plExtraLeg(L, M, side, bl.line), why: [`model ${Math.round(q * 100)}% at the book's line`] });
+  }
+  const day = plDay(cand), pool = cand.filter(l => l.g.date === day).sort((x, y) => y.q - x.q);
+  const legs = [], players = new Set(), games = new Set();
+  let dec = 1;
+  for (const pass of [0, 1]) for (const l of pool) {
+    if (dec >= T.dec - T.slack || legs.length >= T.max || players.has(l.M.player) || (pass === 0 && games.has(plKey(l)))) continue;
+    legs.push(l); players.add(l.M.player); games.add(plKey(l)); dec *= decOdds(l.bo);
+  }
+  return { legs, dec, est: false, ok: dec >= T.dec - T.slack, T, day };
+}
 const bestNote = B => B.legs.length >= 2 ? `<div class="plbook">${B.ok ? `Pays about <b>${fairOdds(1 / B.dec)}</b>${B.est ? " (some legs have no saved price, so the model's fair price stands in for them)" : ""}, which means ${Math.round(100 / B.dec)}%; the model gives it <b>${Math.round(plJoint(B.legs) * 100)}%</b>.` : `Even with the best ${B.legs.length} picks it only pays about ${fairOdds(1 / B.dec)}, short of ${B.T.lab}.`} Picks that were close were sorted by digging deeper: ${B.legs.map(l => `<b>${esc(l.name)}</b> (${esc(l.why.join(", ") || "model pick")})`).join("; ")}. The price only decides how many legs to add; it never changes a pick or its chance.</div>` : "";
 
 function renderParlay() {
@@ -3006,10 +3040,11 @@ function renderParlay() {
   const mixDay = plDay(mixAll), mix = mixAll.filter(l => l.g.date === mixDay).sort((x, y) => y.q - x.q);
   const props = ["nba", "nfl"].map(k => ({ k, ...plBestProps(k) }));
   const LK = plLockSets();
-  const B5 = plBestAt(PL_TARGETS.m150), B3 = plBestAt(PL_TARGETS.p300);
-  const sets = [mix.slice(), ...best.map(b => b.legs), ...props.map(b => b.legs), LK.locks, B5.legs, B3.legs];
-  const lkI = sets.length - 3;
+  const B5 = plBestAt(PL_TARGETS.m150), B3 = plBestAt(PL_TARGETS.p300), BP = plPropsAt({ ...PL_TARGETS.m150, max: 4 });
+  const sets = [mix.slice(), ...best.map(b => b.legs), ...props.map(b => b.legs), LK.locks, B5.legs, B3.legs, BP.legs];
+  const lkI = sets.length - 4;
   B5.legs.note = bestNote(B5); B3.legs.note = bestNote(B3);
+  BP.legs.note = BP.legs.length >= 2 ? `<div class="plbook">Every leg is at the sportsbook's own line with its real price. Pays about <b>${fairOdds(1 / BP.dec)}</b> (${Math.round(100 / BP.dec)}%); the model gives it <b>${Math.round(plJoint(BP.legs) * 100)}%</b>${BP.legs.some((l, i) => BP.legs.findIndex(m => plKey(m) === plKey(l)) !== i) ? ", allowing for picks in the same game moving together" : ""}. Be careful: in testing, props picked like this won only about 52% against real closing lines (NFL) and 51% so far live (NBA), so the model's % here is likely too high. The price only decides how many legs to add.</div>` : "";
   // NBA projections are rebuilt with each news run; before the first run of a game day they still cover the last slate
   const stale = b => b.k === "nba" && b.day && D.nba_props?.asof && D.nba_props.asof < b.day ? `Player projections for ${fmtDayS(b.day)} arrive with the next news run (twice a day, plus before tip-off), then this parlay builds itself.` : null;
   // sections (Alex 2026-10-25): all sports first, then one per sport
@@ -3018,6 +3053,7 @@ function renderParlay() {
   $("pl-sec").querySelectorAll("button").forEach(b => b.onclick = () => { state.plSec = b.dataset.s; renderParlay(); });
   $("pl-best").innerHTML = sec === "all" ? plCard("Best picks parlay", `Around −150 or better · ${B5.day ? fmtDayS(B5.day) : "no games"}`, B5.legs, " lock b5", lkI + 1, B5.legs.length ? "Only one pick is strong enough right now, so no parlay." : "No picks 65%+ sure in the next couple of days.")
     + plCard("Big payout parlay", `Around +300 or better · ${B3.day ? fmtDayS(B3.day) : "no games"}`, B3.legs, " lock b5", lkI + 2, B3.legs.length ? "Only one pick is strong enough right now, so no parlay." : "No picks 65%+ sure in the next few days.")
+    + plCard("Player props parlay", `Real sportsbook lines · ${BP.day ? fmtDayS(BP.day) : "no lines yet"}`, BP.legs, " lock b5 props", lkI + 3, "Not enough NBA or NFL props with real sportsbook lines (and the model 60%+ sure) on one day yet. Lines arrive with the news runs.")
     + plCard("🔒 Lock parlay", `Locks only · ${LK.locks[0] ? fmtDayS(LK.locks[0].g.date) : "next few days"}`, LK.locks, " lock", lkI, LK.locks.length ? "Only one Lock in the next few days, so no parlay. Take it as a single." : "No Locks in the next few days. A Lock is an NBA pick 85%+ sure, an NFL pick 85%+ sure, or a UFC pick 70%+ sure that the betting favourite also backs at 80%+.")
     + plCard("Mixed, all sports", `Top pick from each · ${mixDay ? fmtDayS(mixDay) : "no games"}`, mix, " mix", 0)
     : best.map((b, j) => b.k !== sec ? "" : plCard(SPN[b.k], !b.day ? "No games yet" : fmtDayS(b.day), b.legs, "", j + 1)).join("")
