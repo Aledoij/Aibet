@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="mp-built" content="2026-10-25T11:35:52Z"><meta name="theme-color" content="#070b16"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Predictor"><meta name="robots" content="noindex, nofollow"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icons/icon-192.png"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><script>if (location.protocol === "https:" && "serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js"));</script></head><body>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="mp-built" content="2026-10-25T11:38:41Z"><meta name="theme-color" content="#070b16"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Predictor"><meta name="robots" content="noindex, nofollow"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icons/icon-192.png"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><script>if (location.protocol === "https:" && "serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js"));</script></head><body>
 <title>Matchup Predictor</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -3064,21 +3064,30 @@ function renderParlay() {
   B5.legs.note = bestNote(B5); B3.legs.note = bestNote(B3);
   const propNote = BP => BP.legs.length >= 2 ? `<div class="plbook">Every leg is at the sportsbook's own line with its real price. Pays about <b>${fairOdds(1 / BP.dec)}</b> (${Math.round(100 / BP.dec)}%); the model gives it <b>${Math.round(plJoint(BP.legs) * 100)}%</b>${BP.legs.some((l, i) => BP.legs.findIndex(m => plKey(m) === plKey(l)) !== i) ? ", allowing for picks in the same game moving together" : ""}. Be careful: in testing, props picked like this won only about 52% against real closing lines (NFL) and 51% so far live (NBA), so the model's % here is likely too high. The price only decides how many legs to add.</div>` : "";
   BP.legs.note = propNote(BP); XP.forEach(x => x.B.legs.note = propNote(x.B));
-  const xpCards = sec => XP.map((x, j) => x.sec !== sec ? "" : plCard(x.title, `Real sportsbook lines · ${x.B.day ? fmtDayS(x.B.day) : "no lines yet"}`, x.B.legs, " lock b5 props", lkI + 4 + j, "Not enough props with real sportsbook lines (and the model 60%+ sure) on one day yet.")).join("");
   // NBA projections are rebuilt with each news run; before the first run of a game day they still cover the last slate
   const stale = b => b.k === "nba" && b.day && D.nba_props?.asof && D.nba_props.asof < b.day ? `Player projections for ${fmtDayS(b.day)} arrive with the next news run (twice a day, plus before tip-off), then this parlay builds itself.` : null;
   // sections (Alex 2026-10-25): all sports first, then one per sport
   const sec = state.plSec || "all";
   $("pl-sec").innerHTML = [["all", "All sports"], ...LIVE_SPORTS.map(k => [k, SPN[k]])].map(([v, l]) => `<button data-s="${v}" aria-pressed="${sec === v}">${l}</button>`).join("");
   $("pl-sec").querySelectorAll("button").forEach(b => b.onclick = () => { state.plSec = b.dataset.s; renderParlay(); });
-  $("pl-best").innerHTML = sec === "all" ? plCard("Best picks parlay", `Around −150 or better · ${B5.day ? fmtDayS(B5.day) : "no games"}`, B5.legs, " lock b5", lkI + 1, B5.legs.length ? "Only one pick is strong enough right now, so no parlay." : "No picks 65%+ sure in the next couple of days.")
-    + plCard("Big payout parlay", `Around +300 or better · ${B3.day ? fmtDayS(B3.day) : "no games"}`, B3.legs, " lock b5", lkI + 2, B3.legs.length ? "Only one pick is strong enough right now, so no parlay." : "No picks 65%+ sure in the next few days.")
-    + plCard("Player props parlay", `Real sportsbook lines · ${BP.day ? fmtDayS(BP.day) : "no lines yet"}`, BP.legs, " lock b5 props", lkI + 3, "Not enough NBA or NFL props with real sportsbook lines (and the model 60%+ sure) on one day yet. Lines arrive with the news runs.")
-    + xpCards("all")
-    + plCard("🔒 Lock parlay", `Locks only · ${LK.locks[0] ? fmtDayS(LK.locks[0].g.date) : "next few days"}`, LK.locks, " lock", lkI, LK.locks.length ? "Only one Lock in the next few days, so no parlay. Take it as a single." : "No Locks in the next few days. A Lock is an NBA pick 85%+ sure, an NFL pick 85%+ sure, or a UFC pick 70%+ sure that the betting favourite also backs at 80%+.")
-    + plCard("Mixed, all sports", `Top pick from each · ${mixDay ? fmtDayS(mixDay) : "no games"}`, mix, " mix", 0)
-    : xpCards(sec) + best.map((b, j) => b.k !== sec ? "" : plCard(SPN[b.k], !b.day ? "No games yet" : fmtDayS(b.day), b.legs, "", j + 1)).join("")
-    + props.map((b, j) => b.k !== sec ? "" : plCard(`${SPN[b.k]} player props`, !b.day ? "No games yet" : fmtDayS(b.day), b.legs, " props", 1 + best.length + j, stale(b))).join("");
+  // where each card goes (Alex 2026-10-25): All sports shows only parlays that really mix sports; a parlay whose legs
+  // all come from one sport moves to that sport's section. The same legs are never shown twice in a section.
+  const E = [[B5.legs, "all", () => plCard("Best picks parlay", `Around −150 or better · ${B5.day ? fmtDayS(B5.day) : "no games"}`, B5.legs, " lock b5", lkI + 1, B5.legs.length ? "Only one pick is strong enough right now, so no parlay." : "No picks 65%+ sure in the next couple of days.")], [B3.legs, "all", () => plCard("Big payout parlay", `Around +300 or better · ${B3.day ? fmtDayS(B3.day) : "no games"}`, B3.legs, " lock b5", lkI + 2, B3.legs.length ? "Only one pick is strong enough right now, so no parlay." : "No picks 65%+ sure in the next few days.")], [BP.legs, "all", () => plCard("Player props parlay", `Real sportsbook lines · ${BP.day ? fmtDayS(BP.day) : "no lines yet"}`, BP.legs, " lock b5 props", lkI + 3, "Not enough NBA or NFL props with real sportsbook lines (and the model 60%+ sure) on one day yet. Lines arrive with the news runs.")],
+    ...XP.map((x, j) => [x.B.legs, x.sec, () => plCard(x.title, `Real sportsbook lines · ${x.B.day ? fmtDayS(x.B.day) : "no lines yet"}`, x.B.legs, " lock b5 props", lkI + 4 + j, "Not enough props with real sportsbook lines (and the model 60%+ sure) on one day yet.")]),
+    [LK.locks, "all", () => plCard("🔒 Lock parlay", `Locks only · ${LK.locks[0] ? fmtDayS(LK.locks[0].g.date) : "next few days"}`, LK.locks, " lock", lkI, LK.locks.length ? "Only one Lock in the next few days, so no parlay. Take it as a single." : "No Locks in the next few days. A Lock is an NBA pick 85%+ sure, an NFL pick 85%+ sure, or a UFC pick 70%+ sure that the betting favourite also backs at 80%+.")], [mix, "all", () => plCard("Mixed, all sports", `Top pick from each · ${mixDay ? fmtDayS(mixDay) : "no games"}`, mix, " mix", 0)],
+    ...best.map((b, j) => [b.legs, b.k, () => plCard(SPN[b.k], !b.day ? "No games yet" : fmtDayS(b.day), b.legs, "", j + 1)]),
+    ...props.map((b, j) => [b.legs, b.k, () => plCard(`${SPN[b.k]} player props`, !b.day ? "No games yet" : fmtDayS(b.day), b.legs, " props", 1 + best.length + j, stale(b))])];
+  const sig = legs => legs.map(l => slipKey(l) + "|" + (l.side ?? "") + "|" + (l.line ?? "")).sort().join(";");
+  const shown = {}, html = {};
+  for (const [legs, home, card] of E) {
+    const ks = [...new Set(legs.map(l => l.k))], where = home === "all" && legs.length >= 2 && ks.length === 1 ? ks[0] : home;
+    const k = sig(legs);
+    if (legs.length >= 2 && (shown[where] ||= new Set()).has(k)) continue;
+    (shown[where] ||= new Set()).add(k);
+    html[where] = (html[where] || "") + card();
+  }
+  const mixed = E.some(([legs, home]) => home === "all" && legs.length >= 2 && new Set(legs.map(l => l.k)).size > 1);
+  $("pl-best").innerHTML = (sec === "all" && !mixed ? `<p class="plnone">No parlay mixes sports right now: today's best ones are all from one sport, so they're in that sport's section above.</p>` : "") + (html[sec] || "");
   $("pl-best").querySelectorAll(".go").forEach(b => b.onclick = () => {
     plSlip = sets[+b.dataset.idx].map(l => l.t ? { k: l.k, a: l.a, b: l.b, t: l.t, mid: l.mid, side: l.side, line: l.line } : { k: l.k, a: l.a, b: l.b, side: l.side }); plSave(); renderParlay();
     $("pl-slip").scrollIntoView({ behavior: "smooth", block: "nearest" });
