@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="mp-built" content="2026-10-25T03:32:52Z"><meta name="theme-color" content="#070b16"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Predictor"><meta name="robots" content="noindex, nofollow"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icons/icon-192.png"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><script>if (location.protocol === "https:" && "serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js"));</script></head><body>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="mp-built" content="2026-10-25T11:24:45Z"><meta name="theme-color" content="#070b16"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Predictor"><meta name="robots" content="noindex, nofollow"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icons/icon-192.png"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><script>if (location.protocol === "https:" && "serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js"));</script></head><body>
 <title>Matchup Predictor</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2750,7 +2750,7 @@ function plCard(title, sub, legs, cls, idx, empty) {
   const c = plJoint(legs);
   return `<div class="plcard${cls}"><div class="top"><h3>${title}</h3><small>${sub}</small></div>
     <div class="plbig"><b>${Math.round(c * 100)}%</b><span>chance all ${legs.length} win (${oneIn(c)}) · fair odds ${fairOdds(c)}</span></div>
-    <ul class="pllegs">${legs.map(l => legLi(l, false)).join("")}</ul>${cls === " props" ? `<div class="plbook">Each line is set where the model is 80% sure, steadiest numbers first, mixing games and stats. Props hit 52% against real sportsbook lines in testing (about break-even), so treat this as the model's view, not an edge.${legs.some((l, i) => legs.findIndex(m => plKey(m) === plKey(l)) !== i) ? " Some picks share a game; the % allows for how such picks moved together in past games." : ""}</div>` : (cls === " lock" ? `<div class="plbook">Lock picks won 88–92% on 2022–26 games. Even so, about 1 parlay in ${Math.max(2, Math.round(1 / (1 - c)))} of this kind still loses a leg. The Scorecard tracks how Locks really do.</div>` : "") + plBook(legs)}
+    <ul class="pllegs">${legs.map(l => legLi(l, false)).join("")}</ul>${cls === " props" ? `<div class="plbook">Each line is set where the model is 80% sure, steadiest numbers first, mixing games and stats. Props hit 52% against real sportsbook lines in testing (about break-even), so treat this as the model's view, not an edge.${legs.some((l, i) => legs.findIndex(m => plKey(m) === plKey(l)) !== i) ? " Some picks share a game; the % allows for how such picks moved together in past games." : ""}</div>` : (cls === " lock" && !legs.note ? `<div class="plbook">Lock picks won 88–92% on 2022–26 games. Even so, about 1 parlay in ${Math.max(2, Math.round(1 / (1 - c)))} of this kind still loses a leg. The Scorecard tracks how Locks really do.</div>` : "") + (legs.note ?? plBook(legs))}
     ${idx >= 0 ? `<button class="go" data-idx="${idx}">Edit in builder</button>` : ""}</div>`;
 }
 // Same-game links (player-grades-synergy thread, measured on 2021-26 NBA / 2022-26 NFL games): legs from one game rise
@@ -2953,17 +2953,58 @@ function plLockSets() {
   return { locks: top(locks) };
 }
 
+// Best picks parlay (Alex 2026-10-25): the strongest winner picks across sports, added one at a time until the parlay
+// pays around −150 or better. Legs are chosen and ordered by the model only. Near-ties (picks within a few points of
+// each other, e.g. several around 80%) are broken by "digging deeper": the score model's margin, the sport's past record
+// for 70%+ picks, a Lock badge, and the Less reliable flag. The price only decides when to stop adding legs; it never
+// changes a pick or its chance. Saved moneylines are used where they exist, else the model's fair price.
+const B150 = 1 + 100 / 150;  // decimal odds of −150
+function plBest150() {
+  const end = k => { const d = new Date(todayStr() + "T12:00:00"); d.setDate(d.getDate() + (k === "nfl" ? 7 : 2)); return d.toISOString().slice(0, 10); };
+  const cand = [];
+  for (const k of LIVE_SPORTS) for (const L of plLegs(k).filter(l => l.g.date < end(k))) {
+    const f = favLeg(L), A = SPORTS[k].by[L.a], B = SPORTS[k].by[L.b];
+    if (f.q < PL_MIN || L.deb || (k === "ufc" && A && B && ufcNewcomers(A, B, L.g).length)) continue;
+    const why = [];
+    let pm = null;  // the score model's chance for the same side, from its predicted margin
+    if (OUT[k] && (k === "nba" || k === "nfl")) {
+      const o = (k === "nba" ? nbaScore : nflScore)(A, B, gameCtx(k, L.g)), mg = f.side === "a" ? o.marginA : -o.marginA;
+      pm = Phi(mg / o.sdm);
+      why.push(mg > 0 ? `score model has them by ${Math.round(mg)}` : "score model is less sure");
+    }
+    const lk = lockOf(k, f.q, f.name, f.o, f.side === "a" ? L.g.ob : L.g.oa, false), past = D.edge?.[k]?.["70-100"]?.with_odds?.model_right;
+    if (lk) why.push(lk.lab);
+    if (L.lr) why.push("less reliable");
+    if (past != null && f.q >= 0.7) why.push(`${SPN[k]} 70%+ picks won ${Math.round(past * 100)}% before`);
+    const dig = f.q + (pm != null ? 0.5 * (pm - f.q) : 0) + (lk ? 0.01 : 0) - (L.lr ? 0.03 : 0) + (past != null ? 0.02 * (past - 0.78) : 0);
+    cand.push({ ...f, dig, why });
+  }
+  cand.sort((x, y) => y.dig - x.dig);
+  const legs = [], seen = new Set();
+  let dec = 1, est = false;
+  for (const l of cand) {
+    if (seen.has(plKey(l)) || legs.length >= 5) continue;
+    const d = decOdds(legOdds(l));
+    legs.push(l); seen.add(plKey(l)); dec *= d || 1 / l.q; est ||= !d;
+    if (dec >= B150 - 0.07) break;  // "around −150 or better": stop once it pays about −165 or more
+  }
+  return { legs, dec, est, ok: dec >= B150 - 0.07 };
+}
+
 function renderParlay() {
   const ALL = Object.fromEntries(LIVE_SPORTS.map(k => [k, plLegs(k)]));
   const best = LIVE_SPORTS.map(k => ({ k, ...plBestFor(k) }));
   const mix = best.filter(b => b.legs.length).map(b => b.legs[0]).sort((x, y) => y.q - x.q);
   const props = ["nba", "nfl"].map(k => ({ k, ...plBestProps(k) }));
   const LK = plLockSets();
-  const sets = [mix.slice(), ...best.map(b => b.legs), ...props.map(b => b.legs), LK.locks];
-  const lkI = sets.length - 1;
+  const B5 = plBest150();
+  const sets = [mix.slice(), ...best.map(b => b.legs), ...props.map(b => b.legs), LK.locks, B5.legs];
+  const lkI = sets.length - 2;
+  B5.legs.note = B5.legs.length >= 2 ? `<div class="plbook">${B5.ok ? `Pays about <b>${fairOdds(1 / B5.dec)}</b>${B5.est ? " (some legs have no saved price, so the model's fair price stands in for them)" : ""}, which means ${Math.round(100 / B5.dec)}%; the model gives it <b>${Math.round(plJoint(B5.legs) * 100)}%</b>.` : `Even with the best ${B5.legs.length} picks it only pays about ${fairOdds(1 / B5.dec)}, short of −150.`} Picks that were close were sorted by digging deeper: ${B5.legs.map(l => `<b>${esc(l.name)}</b> (${esc(l.why.join(", ") || "model pick")})`).join("; ")}. The price only decides how many legs to add; it never changes a pick or its chance.</div>` : "";
   // NBA projections are rebuilt with each news run; before the first run of a game day they still cover the last slate
   const stale = b => b.k === "nba" && b.day && D.nba_props?.asof && D.nba_props.asof < b.day ? `Player projections for ${fmtDayS(b.day)} arrive with the next news run (twice a day, plus before tip-off), then this parlay builds itself.` : null;
-  $("pl-best").innerHTML = plCard("🔒 Lock parlay", "Locks only · next 3 days", LK.locks, " lock", lkI, LK.locks.length ? "Only one Lock in the next few days, so no parlay. Take it as a single." : "No Locks in the next few days. A Lock is an NBA pick 85%+ sure, an NFL pick 85%+ sure, or a UFC pick 70%+ sure that the betting favourite also backs at 80%+.")
+  $("pl-best").innerHTML = plCard("Best picks parlay", "Around −150 or better · next 2 days", B5.legs, " lock b5", lkI + 1, B5.legs.length ? "Only one pick is strong enough right now, so no parlay." : "No picks 65%+ sure in the next couple of days.")
+    + plCard("🔒 Lock parlay", "Locks only · next 3 days", LK.locks, " lock", lkI, LK.locks.length ? "Only one Lock in the next few days, so no parlay. Take it as a single." : "No Locks in the next few days. A Lock is an NBA pick 85%+ sure, an NFL pick 85%+ sure, or a UFC pick 70%+ sure that the betting favourite also backs at 80%+.")
     + plCard("Mixed, all sports", "Top pick from each", mix, " mix", 0)
     + best.map((b, j) => plCard(SPN[b.k], !b.day ? "No games yet" : b.k === "nfl" ? "This week" : fmtDayS(b.day), b.legs, "", j + 1)).join("")
     + props.map((b, j) => plCard(`${SPN[b.k]} player props`, !b.day ? "No games yet" : b.k === "nfl" ? "This week" : fmtDayS(b.day), b.legs, " props", 1 + best.length + j, stale(b))).join("");
