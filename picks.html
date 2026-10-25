@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="mp-built" content="2026-10-25T11:24:45Z"><meta name="theme-color" content="#070b16"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Predictor"><meta name="robots" content="noindex, nofollow"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icons/icon-192.png"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><script>if (location.protocol === "https:" && "serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js"));</script></head><body>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="mp-built" content="2026-10-25T11:28:21Z"><meta name="theme-color" content="#070b16"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Predictor"><meta name="robots" content="noindex, nofollow"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icons/icon-192.png"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><script>if (location.protocol === "https:" && "serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js"));</script></head><body>
 <title>Matchup Predictor</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -705,6 +705,7 @@ h1, h2, h3 { letter-spacing: -.01em } h2 { text-transform: none; font-size: 22px
       <div class="bhead"><span class="eyebrow">02 / Parlays</span><span class="pill" id="pl-count"></span></div>
       <h2 class="bbh">Best parlays</h2>
       <p class="bbintro">A parlay joins several picks into one bet, and <b>every pick has to win</b>. So the chance of the whole thing is the picks' chances multiplied together, and it drops fast: three picks that are each 70% likely all win only about 34% of the time. The model chooses these from its own numbers. Odds are never used to pick them.</p>
+      <div class="nwf" id="pl-sec"></div>
       <div class="plgrid" id="pl-best"></div>
       <h3 class="plh">Build your own</h3>
       <p class="bbintro small">Tap a side in any game to add it, and tap it again to remove it. NBA and NFL games also have spreads, totals and player props: type any line (alt lines too), or let the line finder suggest the line where the model is 70%, 80% or 90% sure. A safer line is more likely to hit but pays less, and the finder never looks at odds.</p>
@@ -2696,11 +2697,14 @@ function plLegs(k) {  // every rateable upcoming game from today on, as the mode
 const legSide = (L, side) => ({ ...L, side, name: side === "a" ? L.a : L.b, other: side === "a" ? L.b : L.a, q: side === "a" ? L.p : 1 - L.p, o: side === "a" ? L.g.oa : L.g.ob });
 const favLeg = L => legSide(L, L.p >= 0.5 ? "a" : "b");
 const fmtDayS = d => new Date(d + "T12:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+// every auto parlay uses legs from ONE day (ET) only (Alex 2026-10-25): the earliest day with at least two usable legs
+const plDay = xs => { const n = {}; for (const l of xs) n[l.g.date] = (n[l.g.date] || 0) + 1; const ds = Object.keys(n).sort(); return ds.find(d => n[d] >= 2) || ds[0] || null; };
+const sameDay = xs => { const d = plDay(xs); return xs.filter(l => l.g.date === d); };
 function plBestFor(k) {
   const legs = plLegs(k);
   if (!legs.length) return { day: null, legs: [] };
-  const day = legs.map(l => l.g.date).sort()[0], week = k === "nfl";  // NFL: the whole week's slate, not just Thursday
-  const picks = legs.filter(l => week || l.g.date === day).map(favLeg).filter(l => l.q >= PL_MIN).sort((x, y) => y.q - x.q).slice(0, PL_MAX);
+  const ok = legs.map(favLeg).filter(l => l.q >= PL_MIN), day = plDay(ok) || legs.map(l => l.g.date).sort()[0];
+  const picks = ok.filter(l => l.g.date === day).sort((x, y) => y.q - x.q).slice(0, PL_MAX);
   return { day, legs: picks };
 }
 const oneIn = c => c >= 0.5 ? `better than even` : `about 1 in ${(1 / c).toFixed(c > 0.2 ? 1 : 0).replace(/\.0$/, "")}`;
@@ -2924,7 +2928,7 @@ function plBestProps(k) {
   const legs = plLegs(k);
   if (!legs.length) return { day: null, legs: [] };
   const day = legs.map(l => l.g.date).sort()[0], cand = [];
-  for (const L of legs.filter(l => k === "nfl" || l.g.date === day))
+  for (const L of legs.filter(l => l.g.date === day))
     for (const M of plMarkets(L).filter(m => m.prop && m.starter && PROP_MIN[m.sk] != null)) {
       const f = plFind(M, 0.8)[0];
       if (f && f.x >= PROP_MIN[M.sk]) cand.push({ L, M, f, score: f.x / Math.max(M.proj, 1e-6) });
@@ -2938,7 +2942,7 @@ function plBestProps(k) {
   return { day, legs: pick.map(c => plExtraLeg(c.L, c.M, 1, c.f.x)) };
 }
 
-// Lock parlay (lock-picks thread, Alex 2026-10-25): legs only from Lock / Super lock / UFC Lock winner picks, one leg per game, most sure first, max 3. Next 3 days (NFL: the coming week).
+// Lock parlay (lock-picks thread, Alex 2026-10-25): legs only from Lock / Super lock / UFC Lock winner picks, one leg per game, most sure first, max 3. All on one day.
 // The chance shown is the model's; for UFC Locks the betting favourite only decides which picks qualify.
 function plLockSets() {
   const end = k => { const d = new Date(todayStr() + "T12:00:00"); d.setDate(d.getDate() + (k === "nfl" ? 7 : 3)); return d.toISOString().slice(0, 10); };
@@ -2950,7 +2954,7 @@ function plLockSets() {
     if (lk) locks.push({ ...f, lockLab: lk.lab });
   }
   const top = xs => { const seen = new Set(); return xs.sort((x, y) => y.q - x.q).filter(l => !seen.has(plKey(l)) && seen.add(plKey(l))).slice(0, PL_MAX); };
-  return { locks: top(locks) };
+  return { locks: top(sameDay(locks)) };
 }
 
 // Best picks parlay (Alex 2026-10-25): the strongest winner picks across sports, added one at a time until the parlay
@@ -2958,9 +2962,11 @@ function plLockSets() {
 // each other, e.g. several around 80%) are broken by "digging deeper": the score model's margin, the sport's past record
 // for 70%+ picks, a Lock badge, and the Less reliable flag. The price only decides when to stop adding legs; it never
 // changes a pick or its chance. Saved moneylines are used where they exist, else the model's fair price.
-const B150 = 1 + 100 / 150;  // decimal odds of −150
-function plBest150() {
-  const end = k => { const d = new Date(todayStr() + "T12:00:00"); d.setDate(d.getDate() + (k === "nfl" ? 7 : 2)); return d.toISOString().slice(0, 10); };
+// Two targets (Alex 2026-10-25): around −150 (decimal 1.67, up to 5 legs) and around +300 (decimal 4.0,
+// up to 8 legs; one day only). "Around": stop once the price is within a few cents of the target or longer.
+const PL_TARGETS = { m150: { dec: 1 + 100 / 150, slack: 0.07, days: 2, max: 5, lab: "−150" }, p300: { dec: 4, slack: 0.2, days: 3, max: 8, lab: "+300" } };
+function plBestAt(T) {
+  const end = k => { const d = new Date(todayStr() + "T12:00:00"); d.setDate(d.getDate() + (k === "nfl" ? 7 : T.days)); return d.toISOString().slice(0, 10); };
   const cand = [];
   for (const k of LIVE_SPORTS) for (const L of plLegs(k).filter(l => l.g.date < end(k))) {
     const f = favLeg(L), A = SPORTS[k].by[L.a], B = SPORTS[k].by[L.b];
@@ -2979,35 +2985,43 @@ function plBest150() {
     const dig = f.q + (pm != null ? 0.5 * (pm - f.q) : 0) + (lk ? 0.01 : 0) - (L.lr ? 0.03 : 0) + (past != null ? 0.02 * (past - 0.78) : 0);
     cand.push({ ...f, dig, why });
   }
-  cand.sort((x, y) => y.dig - x.dig);
+  const day = plDay(cand), pool = cand.filter(l => l.g.date === day).sort((x, y) => y.dig - x.dig);
   const legs = [], seen = new Set();
   let dec = 1, est = false;
-  for (const l of cand) {
-    if (seen.has(plKey(l)) || legs.length >= 5) continue;
+  for (const l of pool) {
+    if (seen.has(plKey(l)) || legs.length >= T.max) continue;
     const d = decOdds(legOdds(l));
     legs.push(l); seen.add(plKey(l)); dec *= d || 1 / l.q; est ||= !d;
-    if (dec >= B150 - 0.07) break;  // "around −150 or better": stop once it pays about −165 or more
+    if (dec >= T.dec - T.slack) break;
   }
-  return { legs, dec, est, ok: dec >= B150 - 0.07 };
+  return { legs, dec, est, ok: dec >= T.dec - T.slack, T, day };
 }
+const bestNote = B => B.legs.length >= 2 ? `<div class="plbook">${B.ok ? `Pays about <b>${fairOdds(1 / B.dec)}</b>${B.est ? " (some legs have no saved price, so the model's fair price stands in for them)" : ""}, which means ${Math.round(100 / B.dec)}%; the model gives it <b>${Math.round(plJoint(B.legs) * 100)}%</b>.` : `Even with the best ${B.legs.length} picks it only pays about ${fairOdds(1 / B.dec)}, short of ${B.T.lab}.`} Picks that were close were sorted by digging deeper: ${B.legs.map(l => `<b>${esc(l.name)}</b> (${esc(l.why.join(", ") || "model pick")})`).join("; ")}. The price only decides how many legs to add; it never changes a pick or its chance.</div>` : "";
 
 function renderParlay() {
   const ALL = Object.fromEntries(LIVE_SPORTS.map(k => [k, plLegs(k)]));
   const best = LIVE_SPORTS.map(k => ({ k, ...plBestFor(k) }));
-  const mix = best.filter(b => b.legs.length).map(b => b.legs[0]).sort((x, y) => y.q - x.q);
+  // mixed: the top pick from each sport, all on the same day (the earliest day where two or more sports have one)
+  const mixAll = LIVE_SPORTS.flatMap(k => { const top = {}; for (const l of plLegs(k).map(favLeg).filter(l => l.q >= PL_MIN)) if (!top[l.g.date] || l.q > top[l.g.date].q) top[l.g.date] = l; return Object.values(top); });
+  const mixDay = plDay(mixAll), mix = mixAll.filter(l => l.g.date === mixDay).sort((x, y) => y.q - x.q);
   const props = ["nba", "nfl"].map(k => ({ k, ...plBestProps(k) }));
   const LK = plLockSets();
-  const B5 = plBest150();
-  const sets = [mix.slice(), ...best.map(b => b.legs), ...props.map(b => b.legs), LK.locks, B5.legs];
-  const lkI = sets.length - 2;
-  B5.legs.note = B5.legs.length >= 2 ? `<div class="plbook">${B5.ok ? `Pays about <b>${fairOdds(1 / B5.dec)}</b>${B5.est ? " (some legs have no saved price, so the model's fair price stands in for them)" : ""}, which means ${Math.round(100 / B5.dec)}%; the model gives it <b>${Math.round(plJoint(B5.legs) * 100)}%</b>.` : `Even with the best ${B5.legs.length} picks it only pays about ${fairOdds(1 / B5.dec)}, short of −150.`} Picks that were close were sorted by digging deeper: ${B5.legs.map(l => `<b>${esc(l.name)}</b> (${esc(l.why.join(", ") || "model pick")})`).join("; ")}. The price only decides how many legs to add; it never changes a pick or its chance.</div>` : "";
+  const B5 = plBestAt(PL_TARGETS.m150), B3 = plBestAt(PL_TARGETS.p300);
+  const sets = [mix.slice(), ...best.map(b => b.legs), ...props.map(b => b.legs), LK.locks, B5.legs, B3.legs];
+  const lkI = sets.length - 3;
+  B5.legs.note = bestNote(B5); B3.legs.note = bestNote(B3);
   // NBA projections are rebuilt with each news run; before the first run of a game day they still cover the last slate
   const stale = b => b.k === "nba" && b.day && D.nba_props?.asof && D.nba_props.asof < b.day ? `Player projections for ${fmtDayS(b.day)} arrive with the next news run (twice a day, plus before tip-off), then this parlay builds itself.` : null;
-  $("pl-best").innerHTML = plCard("Best picks parlay", "Around −150 or better · next 2 days", B5.legs, " lock b5", lkI + 1, B5.legs.length ? "Only one pick is strong enough right now, so no parlay." : "No picks 65%+ sure in the next couple of days.")
-    + plCard("🔒 Lock parlay", "Locks only · next 3 days", LK.locks, " lock", lkI, LK.locks.length ? "Only one Lock in the next few days, so no parlay. Take it as a single." : "No Locks in the next few days. A Lock is an NBA pick 85%+ sure, an NFL pick 85%+ sure, or a UFC pick 70%+ sure that the betting favourite also backs at 80%+.")
-    + plCard("Mixed, all sports", "Top pick from each", mix, " mix", 0)
-    + best.map((b, j) => plCard(SPN[b.k], !b.day ? "No games yet" : b.k === "nfl" ? "This week" : fmtDayS(b.day), b.legs, "", j + 1)).join("")
-    + props.map((b, j) => plCard(`${SPN[b.k]} player props`, !b.day ? "No games yet" : b.k === "nfl" ? "This week" : fmtDayS(b.day), b.legs, " props", 1 + best.length + j, stale(b))).join("");
+  // sections (Alex 2026-10-25): all sports first, then one per sport
+  const sec = state.plSec || "all";
+  $("pl-sec").innerHTML = [["all", "All sports"], ...LIVE_SPORTS.map(k => [k, SPN[k]])].map(([v, l]) => `<button data-s="${v}" aria-pressed="${sec === v}">${l}</button>`).join("");
+  $("pl-sec").querySelectorAll("button").forEach(b => b.onclick = () => { state.plSec = b.dataset.s; renderParlay(); });
+  $("pl-best").innerHTML = sec === "all" ? plCard("Best picks parlay", `Around −150 or better · ${B5.day ? fmtDayS(B5.day) : "no games"}`, B5.legs, " lock b5", lkI + 1, B5.legs.length ? "Only one pick is strong enough right now, so no parlay." : "No picks 65%+ sure in the next couple of days.")
+    + plCard("Big payout parlay", `Around +300 or better · ${B3.day ? fmtDayS(B3.day) : "no games"}`, B3.legs, " lock b5", lkI + 2, B3.legs.length ? "Only one pick is strong enough right now, so no parlay." : "No picks 65%+ sure in the next few days.")
+    + plCard("🔒 Lock parlay", `Locks only · ${LK.locks[0] ? fmtDayS(LK.locks[0].g.date) : "next few days"}`, LK.locks, " lock", lkI, LK.locks.length ? "Only one Lock in the next few days, so no parlay. Take it as a single." : "No Locks in the next few days. A Lock is an NBA pick 85%+ sure, an NFL pick 85%+ sure, or a UFC pick 70%+ sure that the betting favourite also backs at 80%+.")
+    + plCard("Mixed, all sports", `Top pick from each · ${mixDay ? fmtDayS(mixDay) : "no games"}`, mix, " mix", 0)
+    : best.map((b, j) => b.k !== sec ? "" : plCard(SPN[b.k], !b.day ? "No games yet" : fmtDayS(b.day), b.legs, "", j + 1)).join("")
+    + props.map((b, j) => b.k !== sec ? "" : plCard(`${SPN[b.k]} player props`, !b.day ? "No games yet" : fmtDayS(b.day), b.legs, " props", 1 + best.length + j, stale(b))).join("");
   $("pl-best").querySelectorAll(".go").forEach(b => b.onclick = () => {
     plSlip = sets[+b.dataset.idx].map(l => l.t ? { k: l.k, a: l.a, b: l.b, t: l.t, mid: l.mid, side: l.side, line: l.line } : { k: l.k, a: l.a, b: l.b, side: l.side }); plSave(); renderParlay();
     $("pl-slip").scrollIntoView({ behavior: "smooth", block: "nearest" });
