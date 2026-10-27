@@ -1,0 +1,27 @@
+# Phone alerts: when a picks update adds new Locks or strong +EV prices, alerts.json changes and this sends each
+# message to the free ntfy app (topic in alerts.json). Made by real-app/alerts/make_alerts.py in the project files.
+name: Phone alerts
+on:
+  push:
+    branches: [main]
+    paths: [alerts.json]
+  workflow_dispatch:
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Send to ntfy
+        run: |
+          python3 - <<'PY'
+          import json, urllib.request
+          d = json.load(open("alerts.json"))
+          for m in d.get("messages", []):
+              req = urllib.request.Request("https://ntfy.sh/", data=json.dumps(m).encode(), headers={"Content-Type": "application/json"})
+              for i in range(3):
+                  try:
+                      print(urllib.request.urlopen(req, timeout=20).status, m["title"]); break
+                  except Exception as e:
+                      print("retry", e)
+          PY
