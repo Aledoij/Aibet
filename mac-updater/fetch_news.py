@@ -286,6 +286,7 @@ def cbs_rosters(snap):
             if p:
                 rows.append([team, p])
         time.sleep(1)
+    rows = list(dict.fromkeys(map(tuple, rows)))  # each roster page lists its players twice (short + long tables)
     if len({r[0] for r in rows}) < 25:
         raise RuntimeError(f"CBS rosters: only {len({r[0] for r in rows})} teams")
     write(snap, "nba_rosters.csv", ["team", "player"], rows)
