@@ -4,6 +4,7 @@
 #   GITHUB_TOKEN   fine-grained token with Contents read/write on Aledoij/Aibet only (blank = use the Mac's saved git login)
 #   PUBLISH_FILE   picks-mac.html while testing side by side with Claude; picks.html once the Mac takes over
 set -e
+export GIT_TERMINAL_PROMPT=0  # never wait at a username prompt: fail fast when no login works
 HERE=$(cd "$(dirname "$0")" && pwd); HOME_DIR=$(dirname "$HERE")
 set -a; [ -f "$HOME_DIR/settings.env" ] && . "$HOME_DIR/settings.env"; set +a
 OUT=${PUBLISH_FILE:-picks-mac.html}

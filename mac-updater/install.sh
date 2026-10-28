@@ -10,6 +10,8 @@ echo "== Python"
 if ! command -v uv >/dev/null; then curl -LsSf https://astral.sh/uv/install.sh | sh; export PATH="$HOME/.local/bin:$PATH"; fi
 [ -x venv/bin/python ] || uv venv --python 3.13 venv
 uv pip install --python venv/bin/python -q pandas numpy scipy scikit-learn pyarrow lightgbm playwright requests beautifulsoup4 lxml
+# lightgbm needs the OpenMP library on Macs (without it the NBA props step crashes: "Library not loaded: libomp.dylib")
+if command -v brew >/dev/null && ! brew list libomp >/dev/null 2>&1; then brew install libomp; fi
 echo "== Chromium"
 PLAYWRIGHT_BROWSERS_PATH="$H/browsers" venv/bin/python -m playwright install chromium
 echo "== project paths"
