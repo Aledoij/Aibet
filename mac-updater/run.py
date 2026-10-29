@@ -92,8 +92,23 @@ def news_run(pretip):
     run_dir = WORK / "run"
     run_dir.mkdir(parents=True, exist_ok=True)
     # run_updates.py prints PROBLEMS: ... at the end; its own failed steps don't stop the upload (same as the Claude task)
-    sh("models, grading and page (run_updates.py)", [py, ROOT / "live-news" / "run_updates.py", ROOT, run_dir],
-       cwd=ROOT / "live-news", timeout=3600)
+    print(f"\n##### models, grading and page (run_updates.py)  ({datetime.now(ET):%I:%M %p ET})", flush=True)
+    try:  # pass its output through, and count the steps it reports as failed in its last "PROBLEMS:" line
+        p = subprocess.Popen([py, str(ROOT / "live-news" / "run_updates.py"), str(ROOT), str(run_dir)],
+                             cwd=ROOT / "live-news", stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        last = ""
+        for line in p.stdout:
+            print(line, end="", flush=True)
+            if line.startswith("PROBLEMS:"):
+                last = line.split(":", 1)[1].strip()
+        p.wait(timeout=3600)
+        if p.returncode:
+            problems.append("run_updates.py crashed")
+        elif last and last != "none":
+            problems.append(f"run_updates: {last}")
+    except Exception as e:  # noqa: BLE001
+        print("run_updates.py:", e)
+        problems.append("run_updates.py")
     page = ROOT / "sports-app" / "matchup-predictor.html"
     if page.exists() and time.time() - page.stat().st_mtime < 3 * 3600:
         publish()
