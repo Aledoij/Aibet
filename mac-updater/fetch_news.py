@@ -208,8 +208,8 @@ def bfo_card(snap):
     s = soup("https://www.bestfightodds.com/")
     for t in s.select("div.table-div"):
         h1 = txt(t.select_one(".table-header h1"))
-        if not h1.startswith("UFC"):
-            continue
+        if not h1.startswith("UFC") or re.search(r"\bBJJ\b|grappling|jiu.?jitsu|fight pass invitational", h1, re.I):
+            continue  # grappling events (e.g. "UFC BJJ 13") are not MMA cards (2026-10-29)
         event = re.sub(r"\s*Odds$", "", h1)
         dtxt = re.sub(r"(st|nd|rd|th)$", "", txt(t.select_one(".table-header-date")))
         try:
