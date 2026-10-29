@@ -120,6 +120,8 @@ if __name__ == "__main__":
     problems = []
     started = datetime.now(timezone.utc)
     print(f"Matchup Predictor updater: {MODE} run, {datetime.now(ET):%a %b %d %I:%M %p ET}", flush=True)
+    # new features and fixes from the cloud copy (Claude threads), plus the updater's own scripts; never blocks the run
+    sh("code sync", [py, UPD / "sync_in.py"], timeout=1200) or problems.remove("code sync")
     if MODE == "full":
         news_run(pretip=False)
     elif MODE == "pretip":
