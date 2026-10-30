@@ -415,6 +415,46 @@
     "sports-app/export/odds_extra/runs.log",
     "sports-app/export/odds_extra/tennis_odds.csv"
    ]
+  },
+  {
+   "version": "2026-10-30T212438Z",
+   "sha256": "b2f2bb3f6f4976f3c049a237469faa9334cd6938def74aef23845857c02a16b8",
+   "parts": 1,
+   "files": 36,
+   "bytes": 1776304,
+   "missing_only": [
+    "sports-app/export/best_time.json",
+    "sports-app/export/bet_scorecard.json",
+    "sports-app/export/clv.json",
+    "sports-app/export/ev.json",
+    "sports-app/export/futures.json",
+    "sports-app/export/line_moves.json",
+    "sports-app/export/line_moves_cache.json",
+    "sports-app/export/live_results.json",
+    "sports-app/export/nba.json",
+    "sports-app/export/nba_opening.json",
+    "sports-app/export/nba_props.json",
+    "sports-app/export/nba_team_inputs.csv",
+    "sports-app/export/nba_team_players.csv",
+    "sports-app/export/news.json",
+    "sports-app/export/nfl_kickoffs.json",
+    "sports-app/export/nfl_wind.json",
+    "sports-app/export/parlay_scorecard.json",
+    "sports-app/export/player_cards.json",
+    "sports-app/export/player_logs.json",
+    "sports-app/export/props.json",
+    "sports-app/export/props_first.json",
+    "sports-app/export/scorecard.json",
+    "sports-app/export/sims.json",
+    "sports-app/export/why_lost.json",
+    "sports-app/export/espn_nba_cache/sb_20261027.json",
+    "sports-app/export/espn_nba_cache/sb_20261028.json",
+    "sports-app/export/espn_nba_cache/sb_20261029.json",
+    "sports-app/export/odds_extra/game_lines.csv",
+    "sports-app/export/odds_extra/prop_lines.csv",
+    "sports-app/export/odds_extra/runs.log",
+    "sports-app/export/odds_extra/tennis_odds.csv"
+   ]
   }
  ]
 }
