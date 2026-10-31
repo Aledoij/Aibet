@@ -35,7 +35,7 @@ STATE = ["live-news/raw/*", "live-news/odds_history/*", "live-news/espn_*", "liv
          "*_latest.csv", "pre-ufc-records/debut_*.json", "auto-retrain/registry*.json", "auto-retrain/history.jsonl",
          "auto-retrain/previous/*", "nfl-win-prediction/pregame_features*.csv", "nfl-win-prediction/injury_features.csv",
          "nfl-win-prediction/nfl_model.json", "nfl-player-props/upcoming_*", "nfl-player-props/spread_tables.json",
-         "*.zip", "*.pyc", "*/__pycache__/*", "*/node_modules/*"]
+         "*/backups/*", "*.zip", "*.pyc", "*/__pycache__/*", "*/node_modules/*"]
 
 
 def live_dirs():
@@ -45,7 +45,8 @@ def live_dirs():
     for pat in ("live-news/*.py", "sports-app/*.py", "sports-app/*/*.py", "simulator/live/*.py", "auto-retrain/*.py",
                 "mac-updater/*.py"):
         for f in ROOT.glob(pat):
-            txt += f.read_text(errors="ignore")
+            # code only: a folder named in a comment (e.g. "nonstop idea 47") is research, not a live input
+            txt += "\n".join(l.split("#", 1)[0] for l in f.read_text(errors="ignore").splitlines()) + "\n"
     found = {n for n in names if re.search(r'["/ (]' + re.escape(n) + r'["/)]', txt)}
     return found | {"live-news", "sports-app", "simulator"}
 
