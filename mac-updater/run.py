@@ -11,6 +11,7 @@ Betting odds never feed a model, pick or grade: they are only saved and shown si
 Each run's log goes to logs/<UTC time>_<mode>.log; logs/last_<mode>.txt says how it ended.
 """
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -82,7 +83,25 @@ def build_page():
     return sh("build page", [py, "build_page.py"], cwd=ROOT / "sports-app")
 
 
+def nfl_grades_if_code_changed():
+    """NFL player grades are normally rebuilt only by the Wed/Sat NFL refresh. When a cloud fix to nfl_ovr.py arrives
+    (newer than the grades file), rebuild them now from the nflverse files the last NFL refresh downloaded, so the fix
+    shows on the next page build instead of days later. A failure keeps the old grades (display only)."""
+    pg, g = ROOT / "player-grades-synergy", WORK / "nfl" / "grades"
+    code, out = pg / "nfl_ovr.py", pg / "nfl_ovr_latest.csv"
+    if not (code.exists() and g.is_dir() and any(g.glob("st_*.parquet"))):
+        return
+    if out.exists() and out.stat().st_mtime >= code.stat().st_mtime:
+        return
+    new = g / "nfl_ovr_new.csv"
+    if sh("NFL player grades (code changed)", [py, code, ROOT / "sports-app" / "export" / "nfl.json", g,
+          ROOT / "player-impact" / "nfl_player_grades_latest.csv", pg / "results_nfl_ovr_weights.json", new], cwd=pg) \
+            and new.exists() and sum(1 for _ in open(new)) >= 500:
+        shutil.copyfile(new, out)
+
+
 def news_run(pretip):
+    nfl_grades_if_code_changed()
     sh("fetch news pages", [py, UPD / "fetch_news.py", ROOT, "pretip" if pretip else "full"], timeout=1500)
     snap = newest_snap()
     sh("sportsbook lines (PropLine, compare only)", [py, ROOT / "live-news" / "propline_lines.py", snap],
